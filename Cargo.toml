@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "shua_struct_macro",
+    "shua_struct",
+]
+resolver = "3"
+
+[profile.release]
+opt-level = 3
+strip = "debuginfo"
+lto = true

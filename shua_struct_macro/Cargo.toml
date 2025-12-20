@@ -1,0 +1,16 @@
+[package]
+name = "shua_struct_macro"
+version = "0.1.0"
+edition = "2024"
+authors = ["Shua <CHA_Shua@outlook.com>"]
+license = "MIT"
+repository = "https://github.com/Shua-github/shua-struct-rs"
+description = "macro of shua_struct"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1.0.42"
+syn = "2"
+proc-macro2 = "1.0.53"
