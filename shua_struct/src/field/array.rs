@@ -6,10 +6,7 @@ where
     T: BinaryField<O> + Default + Copy,
 {
     fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<(Self, usize), String> {
-        let align = raw_opts
-            .as_ref()
-            .ok_or("[T; N] parse error: missing opts")?
-            .get_align();
+        let align = raw_opts.as_ref().and_then(|opts| opts.get_align());
 
         let mut offset = 0;
         let mut arr: [T; N] = [T::default(); N];
@@ -30,10 +27,7 @@ where
     }
 
     fn build(&self, raw_opts: &Option<Options>) -> Result<BitVec<u8, O>, String> {
-        let align = raw_opts
-            .as_ref()
-            .ok_or("[T; N] build error: missing opts")?
-            .get_align();
+        let align = raw_opts.as_ref().and_then(|opts| opts.get_align());
 
         let mut bv = BitVec::<u8, O>::new();
         for item in self.iter() {
