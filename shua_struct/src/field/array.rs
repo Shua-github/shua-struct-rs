@@ -1,4 +1,4 @@
-use super::{BinaryField, Options};
+use crate::{BinaryField, Options};
 use bitvec::prelude::*;
 
 impl<T, O: BitOrder, const N: usize> BinaryField<O> for [T; N]

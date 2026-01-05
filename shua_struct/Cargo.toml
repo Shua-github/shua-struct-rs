@@ -1,14 +1,16 @@
 [package]
 name = "shua_struct"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Shua <CHA_Shua@outlook.com>"]
 license = "MIT"
 repository = "https://github.com/Shua-github/shua-struct-rs"
 description = "Flexible binary data parsing and building for Rust."
+readme = "../README.md"
 
 [dependencies]
 bitvec = "1.0.1"
+shua_struct_macro = { path = "../shua_struct_macro" }
 
 [features]
 array = []

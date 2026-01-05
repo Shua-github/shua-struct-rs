@@ -1,43 +1,37 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse::Parse, Data, DeriveInput, Fields, Ident, LitInt, parse_macro_input, Path, Token};
+use syn::{Data, DeriveInput, Fields, Ident, LitInt, Path, Token, parse_macro_input};
 
-struct AttrArgs {
-    bit_order: Ident,
-}
+#[proc_macro_derive(BinaryStruct, attributes(binary_struct, binary_field))]
+pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let mut bit_order: Path = syn::parse_str("shua_struct::Lsb0").unwrap();
 
-impl Parse for AttrArgs {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let path: Path = input.parse()?;
-        if !path.is_ident("bit_order") {
-            return Err(input.error("expected `bit_order`"));
+    for attr in input.attrs.iter() {
+        if attr.path().is_ident("binary_struct") {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("bit_order") {
+                    meta.input.parse::<Token![=]>()?;
+                    bit_order = meta.input.parse()?;
+                } else {
+                    return Err(meta.error("expected `bit_order`"));
+                }
+                Ok(())
+            })
+            .unwrap();
         }
-        input.parse::<Token![=]>()?;
-        let bit_order: Ident = input.parse()?;
-        Ok(Self { bit_order })
     }
-}
 
-#[proc_macro_attribute]
-pub fn binary_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let order = if attr.is_empty() {
-        Ident::new("Lsb0", proc_macro::Span::call_site().into())
-    } else {
-        let args = parse_macro_input!(attr as AttrArgs);
-        args.bit_order
-    };
-
-    let mut input = parse_macro_input!(item as DeriveInput);
     let struct_name = &input.ident;
     let fields_named = match &input.data {
         Data::Struct(data) => {
             if let Fields::Named(fields) = &data.fields {
                 fields.named.clone()
             } else {
-                panic!("binary_struct only supports structs with named fields");
+                panic!("BinaryStruct only supports structs with named fields");
             }
         }
-        _ => panic!("binary_struct only works on structs"),
+        _ => panic!("BinaryStruct only works on structs"),
     };
     let mut parse_stmts = Vec::new();
     let mut build_stmts = Vec::new();
@@ -45,45 +39,53 @@ pub fn binary_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
     for field in fields_named.iter() {
         let field_name = field.ident.as_ref().unwrap();
         let field_type = &field.ty;
-        let field_name_str = field_name.to_string();
         let mut opt_size_field: Option<Ident> = None;
         let mut opt_size_func: Option<Ident> = None;
         let mut opt_align: Option<usize> = None;
         let mut opt_sub_align: Option<u8> = None;
+        let has_binary_field_attr = field
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("binary_field"));
         for attr in &field.attrs {
-            let _ = attr.parse_nested_meta(|meta| {
-                if meta.path.is_ident("size_field") {
-                    let value = meta.value()?;
-                    let field_ident: Ident = value.parse()?;
-                    opt_size_field = Some(field_ident);
-                    return Ok(());
-                }
-                if meta.path.is_ident("size_func") {
-                    let value = meta.value()?;
-                    let func_ident: Ident = value.parse()?;
-                    opt_size_func = Some(func_ident);
-                    return Ok(());
-                }
-                if meta.path.is_ident("align") {
-                    let value = meta.value()?;
-                    let align_lit: LitInt = value.parse()?;
-                    let align_val: usize = align_lit.base10_parse()?;
-                    opt_align = Some(align_val);
-                    return Ok(());
-                }
-                if meta.path.is_ident("sub_align") {
-                    let value = meta.value()?;
-                    let align_lit: LitInt = value.parse()?;
-                    let align_val: u8 = align_lit.base10_parse()?;
-                    opt_sub_align = Some(align_val);
-                    return Ok(());
-                }
-                Err(meta.error(
-                    "expected `size_field = ...`, `size_func = ...`, `align = ...`, or `sub_align = ...`",
-                ))
-            });
+            if attr.path().is_ident("binary_field") {
+                let _ = attr.parse_nested_meta(|meta| {
+                    if meta.path.is_ident("size_field") {
+                        meta.input.parse::<Token![=]>()?;
+                        opt_size_field = Some(meta.input.parse()?);
+                        return Ok(());
+                    }
+                    if meta.path.is_ident("size_func") {
+                        meta.input.parse::<Token![=]>()?;
+                        opt_size_func = Some(meta.input.parse()?);
+                        return Ok(());
+                    }
+                    if meta.path.is_ident("align") {
+                        meta.input.parse::<Token![=]>()?;
+                        let align_lit: LitInt = meta.input.parse()?;
+                        let align_val: usize = align_lit.base10_parse()?;
+                        opt_align = Some(align_val);
+                        return Ok(());
+                    }
+                    if meta.path.is_ident("sub_align") {
+                        meta.input.parse::<Token![=]>()?;
+                        let align_lit: LitInt = meta.input.parse()?;
+                        let align_val: u8 = align_lit.base10_parse()?;
+                        opt_sub_align = Some(align_val);
+                        return Ok(());
+                    }
+                    Err(meta.error(
+                        "expected `size_field = ...`, `size_func = ...`, `align = ...`, or `sub_align = ...`",
+                    ))
+                });
+            }
         }
         field_names.push(field_name);
+        let has_opts = opt_size_field.is_some()
+            || opt_size_func.is_some()
+            || opt_align.is_some()
+            || opt_sub_align.is_some()
+            || has_binary_field_attr;
         let align_val = opt_align.unwrap_or(0);
         let sub_align_val = opt_sub_align.unwrap_or(0);
         let size_calc = if let Some(size_field) = opt_size_field.clone() {
@@ -93,13 +95,16 @@ pub fn binary_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             quote! { 0 }
         };
-        let field_opts = quote! {
-            Options {
-                name: #field_name_str.to_string(),
-                size: #size_calc,
-                align: #align_val,
-                sub_align: Cell::new(#sub_align_val),
+        let field_opts_parse = if has_opts {
+            quote! {
+                Some(shua_struct::Options {
+                    size: #size_calc,
+                    align: #align_val,
+                    sub_align: std::cell::Cell::new(#sub_align_val),
+                })
             }
+        } else {
+            quote! { None }
         };
         let align_parse_logic = if opt_align.is_some() && opt_sub_align.is_none() {
             quote! {
@@ -112,8 +117,8 @@ pub fn binary_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {}
         };
         parse_stmts.push(quote! {
-            let field_opts = Some(#field_opts);
-            let (val, mut l) = <#field_type as BinaryField<#order>>::parse(
+            let field_opts = #field_opts_parse;
+            let (val, mut l) = <#field_type as shua_struct::BinaryField<#bit_order>>::parse(
                 &bits[offset..],
                 &field_opts
             )?;
@@ -128,13 +133,16 @@ pub fn binary_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
         } else {
             quote! { 0 }
         };
-        let field_opts_build = quote! {
-            Options {
-                name: #field_name_str.to_string(),
-                size: #size_calc_build,
-                align: #align_val,
-                sub_align: Cell::new(#sub_align_val),
+        let field_opts_build = if has_opts {
+            quote! {
+                Some(shua_struct::Options {
+                    size: #size_calc_build,
+                    align: #align_val,
+                    sub_align: std::cell::Cell::new(#sub_align_val),
+                })
             }
+        } else {
+            quote! { None }
         };
         let align_build_logic = if opt_align.is_some() && opt_sub_align.is_none() {
             quote! {
@@ -147,35 +155,25 @@ pub fn binary_struct(attr: TokenStream, item: TokenStream) -> TokenStream {
             quote! {}
         };
         build_stmts.push(quote! {
-            let field_opts = Some(#field_opts_build);
-            let mut field_bv = <#field_type as BinaryField<#order>>::build(&self.#field_name, &field_opts)?;
+            let field_opts = #field_opts_build;
+            let mut field_bv = <#field_type as shua_struct::BinaryField<#bit_order>>::build(&self.#field_name, &field_opts)?;
             #align_build_logic
             bv.extend(field_bv);
         });
     }
-    if let Data::Struct(ref mut data) = input.data {
-        if let Fields::Named(ref mut fields) = data.fields {
-            for field in fields.named.iter_mut() {
-                field
-                    .attrs
-                    .retain(|attr| !attr.path().is_ident("binary_field"));
-            }
-        }
-    }
     let expanded = quote! {
-        #input
-        impl BinaryField<#order> for #struct_name {
+        impl shua_struct::BinaryField<#bit_order> for #struct_name {
             fn parse(
-                bits: &BitSlice<u8, #order>,
-                outer_opts: &Option<Options>,
+                bits: &shua_struct::BitSlice<u8, #bit_order>,
+                outer_opts: &Option<shua_struct::Options>,
             ) -> Result<(Self, usize), String> {
                 let mut s = Self::default();
                 let mut offset = 0;
                 #(#parse_stmts)*
                 Ok((s, offset))
             }
-            fn build(&self, outer_opts: &Option<Options>) -> Result<BitVec<u8, #order>, String> {
-                let mut bv = BitVec::new();
+            fn build(&self, outer_opts: &Option<shua_struct::Options>) -> Result<shua_struct::BitVec<u8, #bit_order>, String> {
+                let mut bv = shua_struct::BitVec::new();
                 #(#build_stmts)*
                 Ok(bv)
             }

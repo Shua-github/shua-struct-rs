@@ -1,10 +1,13 @@
-use super::{BinaryField, Options};
+use crate::{BinaryField, Options};
 use bitvec::prelude::*;
 
 macro_rules! impl_bit_float {
     ($t:ty, $int:ty, $size_bits:expr) => {
         impl BinaryField<Lsb0> for $t {
-            fn parse(bits: &BitSlice<u8, Lsb0>, _opts: &Option<Options>) -> Result<(Self, usize), String> {
+            fn parse(
+                bits: &BitSlice<u8, Lsb0>,
+                _opts: &Option<Options>,
+            ) -> Result<(Self, usize), String> {
                 if bits.len() < $size_bits {
                     return Err(format!(
                         "{} parse error: not enough bits (needed {}, got {})",
@@ -27,7 +30,10 @@ macro_rules! impl_bit_float {
         }
 
         impl BinaryField<Msb0> for $t {
-            fn parse(bits: &BitSlice<u8, Msb0>, _opts: &Option<Options>) -> Result<(Self, usize), String> {
+            fn parse(
+                bits: &BitSlice<u8, Msb0>,
+                _opts: &Option<Options>,
+            ) -> Result<(Self, usize), String> {
                 if bits.len() < $size_bits {
                     return Err(format!(
                         "{} parse error: not enough bits (needed {}, got {})",

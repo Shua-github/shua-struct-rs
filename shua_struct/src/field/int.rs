@@ -1,4 +1,4 @@
-use super::{BinaryField, Options};
+use crate::{BinaryField, Options};
 use bitvec::prelude::*;
 
 macro_rules! impl_bit_primitive {

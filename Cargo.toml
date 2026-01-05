@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "shua_struct_macro",
-    "shua_struct",
+    "shua_struct", "example",
 ]
 resolver = "3"
 

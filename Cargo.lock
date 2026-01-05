@@ -15,6 +15,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "example"
+version = "0.1.0"
+dependencies = [
+ "shua_struct",
+]
+
+[[package]]
 name = "funty"
 version = "2.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -46,14 +53,15 @@ checksum = "dc33ff2d4973d518d823d61aa239014831e521c75da58e3df4840d3f47749d09"
 
 [[package]]
 name = "shua_struct"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "bitvec",
+ "shua_struct_macro",
 ]
 
 [[package]]
 name = "shua_struct_macro"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "proc-macro2",
  "quote",
