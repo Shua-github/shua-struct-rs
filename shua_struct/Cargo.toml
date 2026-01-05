@@ -10,7 +10,7 @@ readme = "../README.md"
 
 [dependencies]
 bitvec = "1.0.1"
-shua_struct_macro = { path = "../shua_struct_macro" }
+shua_struct_macro = { version = "0.2.0", path = "../shua_struct_macro" }
 
 [features]
 array = []
