@@ -1,5 +1,6 @@
 pub mod field;
 pub use bitvec::prelude::*;
+pub use bitvec::field::BitField;
 pub use shua_struct_macro::BinaryStruct;
 
 #[derive(Debug, Default)]
