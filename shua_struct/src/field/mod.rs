@@ -9,3 +9,6 @@ pub mod int;
 
 #[cfg(feature = "float")]
 pub mod float;
+
+#[cfg(feature = "cstring")]
+pub mod cstring;

@@ -1,6 +1,8 @@
+use std::ffi::CString;
+
 use shua_struct::{BinaryField as _, BinaryStruct};
 
-#[derive(Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryStruct)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Item {
     pub id: u16,
@@ -10,7 +12,7 @@ pub struct Item {
     pub flags: [bool; 4],
 }
 
-#[derive(Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryStruct)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Inventory {
     pub max_slots: u8,
@@ -24,17 +26,18 @@ impl Inventory {
     }
 }
 
-#[derive(Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryStruct)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Player {
     pub player_id: u32,
+    pub name: CString,
     pub level: u8,
     #[binary_field(size_field = level)]
     pub skills: Vec<Skill>,
     pub inventory: Inventory,
 }
 
-#[derive(Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryStruct)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Skill {
     pub skill_id: u8,
@@ -44,7 +47,7 @@ pub struct Skill {
     pub modifiers: [bool; 2],
 }
 
-#[derive(Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryStruct)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct GameSave {
     pub version: u16,
@@ -63,6 +66,7 @@ fn main() {
         players: vec![
             Player {
                 player_id: 1001,
+                name: CString::new("Player One").unwrap(),
                 level: 3,
                 skills: vec![
                     Skill {
@@ -104,6 +108,7 @@ fn main() {
             },
             Player {
                 player_id: 1002,
+                name: CString::new("Player Two").unwrap(),
                 level: 2,
                 skills: vec![
                     Skill {
@@ -132,29 +137,13 @@ fn main() {
         ],
     };
 
-    let serialized1 = game_save.build(&None).unwrap();
+    let serialized = game_save.build(&None).unwrap();
 
-    let deserialized = GameSave::parse(&serialized1, &None).unwrap().0;
+    let deserialized = GameSave::parse(&serialized, &None).unwrap().0;
 
-    let serialized2 = deserialized.build(&None).unwrap();
+    let serialized_again = deserialized.build(&None).unwrap();
 
-    println!(
-        "Serialized1 size: {}, Serialized2 size: {}",
-        serialized1.len(),
-        serialized2.len()
-    );
-    println!(
-        "First 16 bytes of Serialized1: {:02X?}",
-        &serialized1[..16.min(serialized1.len())]
-    );
-    println!(
-        "First 16 bytes of Serialized2: {:02X?}",
-        &serialized2[..16.min(serialized2.len())]
-    );
+    println!("raw: \n{:?}\ndeserialized: \n{:?}", game_save, deserialized);
 
-    if serialized1 == serialized2 {
-        println!("OK");
-    } else {
-        panic!()
-    }
+    assert_eq!(serialized, serialized_again);
 }

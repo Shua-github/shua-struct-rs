@@ -1,6 +1,6 @@
 [package]
 name = "shua_struct"
-version = "0.2.2"
+version = "0.2.3"
 edition = "2024"
 authors = ["Shua <CHA_Shua@outlook.com>"]
 license = "MIT"
@@ -17,4 +17,6 @@ array = []
 bool = []
 int = []
 float = []
-all = ["array", "bool", "int", "float"]
+cstring = []
+
+all = ["array", "bool", "int", "float", "cstring"]

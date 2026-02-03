@@ -6,6 +6,7 @@ members = [
 resolver = "3"
 
 [profile.release]
+debug = false 
+strip = "symbols"
 opt-level = 3
-strip = "debuginfo"
 lto = true
