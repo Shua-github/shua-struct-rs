@@ -1,149 +1,133 @@
+use shua_struct::BinaryField;
 use std::ffi::CString;
 
-use shua_struct::{BinaryField as _, BinaryStruct};
-
-#[derive(Debug, Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryField)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Item {
     pub id: u16,
-    pub quantity: u8,
-    pub value: f32,
+    pub count: u8,
     #[binary_field(align = 8)]
-    pub flags: [bool; 4],
+    pub flags: [bool; 3],
 }
 
-#[derive(Debug, Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryField)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Inventory {
-    pub max_slots: u8,
-    #[binary_field(size_func = get_actual_slots)]
+    pub slot_count: u8,
+    #[binary_field(size_func = actual_slots)]
     pub items: Vec<Item>,
 }
 
 impl Inventory {
-    fn get_actual_slots(&self) -> usize {
-        return self.max_slots as usize;
+    fn actual_slots(&self) -> usize {
+        self.slot_count as usize
     }
 }
 
-#[derive(Debug, Default, BinaryStruct)]
+#[derive(Debug, Default, BinaryField)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Player {
-    pub player_id: u32,
+    #[binary_field(check_func = check_version)]
+    pub version: u8,
+    pub id: u32,
     pub name: CString,
     pub level: u8,
     #[binary_field(size_field = level)]
-    pub skills: Vec<Skill>,
     pub inventory: Inventory,
+    #[binary_field(if_func = should_nickname)]
+    pub nickname: Option<CString>,
 }
 
-#[derive(Debug, Default, BinaryStruct)]
-#[binary_struct(bit_order = shua_struct::Lsb0)]
-pub struct Skill {
-    pub skill_id: u8,
-    pub points: u8,
-    pub multiplier: f32,
-    #[binary_field(align = 8)]
-    pub modifiers: [bool; 2],
-}
+impl Player {
+    fn check_version(&self) -> Option<String> {
+        if self.version <= 1 {
+            Some("Version must be greater than 1".to_string())
+        } else {
+            None
+        }
+    }
 
-#[derive(Debug, Default, BinaryStruct)]
-#[binary_struct(bit_order = shua_struct::Lsb0)]
-pub struct GameSave {
-    pub version: u16,
-    pub player_count: u8,
-    #[binary_field(size_field = player_count)]
-    pub players: Vec<Player>,
-    #[binary_field(align = 8)]
-    pub options: [bool; 6],
+    fn should_nickname(&self) -> bool {
+        self.version >= 3
+    }
 }
 
 fn main() {
-    let game_save = GameSave {
-        version: 1,
-        player_count: 2,
-        options: [true, false, true, false, true, true],
-        players: vec![
-            Player {
-                player_id: 1001,
-                name: CString::new("Player One").unwrap(),
-                level: 3,
-                skills: vec![
-                    Skill {
-                        skill_id: 1,
-                        points: 5,
-                        multiplier: 1.2,
-                        modifiers: [true, false],
-                    },
-                    Skill {
-                        skill_id: 2,
-                        points: 3,
-                        multiplier: 1.0,
-                        modifiers: [false, true],
-                    },
-                    Skill {
-                        skill_id: 3,
-                        points: 1,
-                        multiplier: 0.8,
-                        modifiers: [true, true],
-                    },
-                ],
-                inventory: Inventory {
-                    max_slots: 2,
-                    items: vec![
-                        Item {
-                            id: 101,
-                            quantity: 5,
-                            value: 10.5,
-                            flags: [true, false, false, true],
-                        },
-                        Item {
-                            id: 202,
-                            quantity: 1,
-                            value: 100.0,
-                            flags: [false, true, true, false],
-                        },
-                    ],
+    println!("=== Test 1: Version 2 (nickname skipped) ===");
+    let player_v2 = Player {
+        version: 2,
+        id: 1,
+        name: CString::new("Alice").unwrap(),
+        level: 2,
+        nickname: Some(CString::new("AAA").unwrap()),
+        inventory: Inventory {
+            slot_count: 2,
+            items: vec![
+                Item {
+                    id: 100,
+                    count: 3,
+                    flags: [true, false, true],
                 },
-            },
-            Player {
-                player_id: 1002,
-                name: CString::new("Player Two").unwrap(),
-                level: 2,
-                skills: vec![
-                    Skill {
-                        skill_id: 1,
-                        points: 2,
-                        multiplier: 1.1,
-                        modifiers: [true, true],
-                    },
-                    Skill {
-                        skill_id: 2,
-                        points: 4,
-                        multiplier: 1.3,
-                        modifiers: [false, true],
-                    },
-                ],
-                inventory: Inventory {
-                    max_slots: 1,
-                    items: vec![Item {
-                        id: 101,
-                        quantity: 2,
-                        value: 10.5,
-                        flags: [true, true, false, false],
-                    }],
+                Item {
+                    id: 200,
+                    count: 1,
+                    flags: [false, true, false],
                 },
-            },
-        ],
+            ],
+        },
     };
 
-    let serialized = game_save.build(&None).unwrap();
+    let data = player_v2.build(&None).unwrap();
+    let (parsed, _) = Player::parse(&data, &None).unwrap();
+    assert_eq!(parsed.nickname, None);
+    let data2 = parsed.build(&None).unwrap();
+    assert_eq!(data, data2);
+    println!("✓ Test 1 passed\n");
 
-    let deserialized = GameSave::parse(&serialized, &None).unwrap().0;
+    println!("=== Test 2: Version 3 (nickname included) ===");
+    let player_v3 = Player {
+        version: 3,
+        id: 2,
+        name: CString::new("Bob").unwrap(),
+        level: 3,
+        nickname: Some(CString::new("B-Man").unwrap()),
+        inventory: Inventory {
+            slot_count: 1,
+            items: vec![Item {
+                id: 300,
+                count: 5,
+                flags: [true, true, false],
+            }],
+        },
+    };
 
-    let serialized_again = deserialized.build(&None).unwrap();
+    let data = player_v3.build(&None).unwrap();
+    let (parsed, _) = Player::parse(&data, &None).unwrap();
+    let data2 = parsed.build(&None).unwrap();
 
-    println!("raw: \n{:?}\ndeserialized: \n{:?}", game_save, deserialized);
+    assert_eq!(data, data2);
+    println!("✓ Test 2 passed\n");
 
-    assert_eq!(serialized, serialized_again);
+    println!("=== Test 3: Version 1 (invalid version, should error) ===");
+    let player_v1 = Player {
+        version: 1,
+        id: 3,
+        name: CString::new("Charlie").unwrap(),
+        level: 1,
+        nickname: None,
+        inventory: Inventory {
+            slot_count: 0,
+            items: vec![],
+        },
+    };
+
+    let data = player_v1.build(&None).unwrap();
+    match Player::parse(&data, &None) {
+        Ok(_) => println!("✗ Test 3 failed: should have returned error"),
+        Err(e) => {
+            println!("✓ Test 3 passed: got expected error: {}", e);
+        }
+    }
+
+
 }

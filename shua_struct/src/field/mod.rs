@@ -12,3 +12,6 @@ pub mod float;
 
 #[cfg(feature = "cstring")]
 pub mod cstring;
+
+#[cfg(feature = "option")]
+pub mod option;

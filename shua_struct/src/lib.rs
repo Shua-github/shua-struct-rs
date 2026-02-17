@@ -1,8 +1,11 @@
 pub mod field;
+#[doc(no_inline)]
 pub use bitvec::field::BitField;
+#[doc(no_inline)]
 pub use bitvec::prelude::*;
-pub use shua_struct_macro::BinaryStruct;
+pub use shua_struct_macro::BinaryField;
 
+#[doc(hidden)]
 #[derive(Debug, Default)]
 pub struct Options {
     pub size: usize,
