@@ -31,13 +31,14 @@ where
 
         let mut bv = BitVec::<u8, O>::new();
         for item in self.iter() {
+            bv.extend(item.build(raw_opts)?);
+
             if let Some(align) = align {
                 let r = bv.len() % align;
                 if r != 0 {
                     bv.resize(bv.len() + (align - r), false);
                 }
             }
-            bv.extend(item.build(raw_opts)?);
         }
         Ok(bv)
     }
