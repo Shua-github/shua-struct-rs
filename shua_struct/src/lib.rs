@@ -29,7 +29,9 @@ pub trait BinaryField<O: bitvec::prelude::BitOrder>: Sized {
     fn parse(
         bits: &bitvec::prelude::BitSlice<u8, O>,
         opts: &Option<Options>,
-    ) -> Result<(Self, usize), String>;
+    ) -> Result<Self, String>;
 
     fn build(&self, opts: &Option<Options>) -> Result<bitvec::prelude::BitVec<u8, O>, String>;
+
+    fn bit_len(&self, opts: &Option<Options>) -> usize;
 }

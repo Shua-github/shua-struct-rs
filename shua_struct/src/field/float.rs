@@ -4,10 +4,8 @@ use bitvec::prelude::*;
 macro_rules! impl_bit_float {
     ($t:ty, $int:ty, $size_bits:expr) => {
         impl BinaryField<Lsb0> for $t {
-            fn parse(
-                bits: &BitSlice<u8, Lsb0>,
-                _opts: &Option<Options>,
-            ) -> Result<(Self, usize), String> {
+            #[inline]
+            fn parse(bits: &BitSlice<u8, Lsb0>, _opts: &Option<Options>) -> Result<Self, String> {
                 if bits.len() < $size_bits {
                     return Err(format!(
                         "{} parse error: not enough bits (needed {}, got {})",
@@ -17,9 +15,10 @@ macro_rules! impl_bit_float {
                     ));
                 }
                 let raw_bits = bits[0..$size_bits].load_le::<$int>();
-                Ok((<$t>::from_bits(raw_bits), $size_bits))
+                Ok(<$t>::from_bits(raw_bits))
             }
 
+            #[inline]
             fn build(&self, _opts: &Option<Options>) -> Result<BitVec<u8, Lsb0>, String> {
                 let mut bv = BitVec::<u8, Lsb0>::new();
                 let bytes = self.to_bits().to_le_bytes();
@@ -27,13 +26,16 @@ macro_rules! impl_bit_float {
                 bv.truncate($size_bits);
                 Ok(bv)
             }
+
+            #[inline]
+            fn bit_len(&self, _opts: &Option<Options>) -> usize {
+                $size_bits
+            }
         }
 
         impl BinaryField<Msb0> for $t {
-            fn parse(
-                bits: &BitSlice<u8, Msb0>,
-                _opts: &Option<Options>,
-            ) -> Result<(Self, usize), String> {
+            #[inline]
+            fn parse(bits: &BitSlice<u8, Msb0>, _opts: &Option<Options>) -> Result<Self, String> {
                 if bits.len() < $size_bits {
                     return Err(format!(
                         "{} parse error: not enough bits (needed {}, got {})",
@@ -43,15 +45,21 @@ macro_rules! impl_bit_float {
                     ));
                 }
                 let raw_bits = bits[0..$size_bits].load_be::<$int>();
-                Ok((<$t>::from_bits(raw_bits), $size_bits))
+                Ok(<$t>::from_bits(raw_bits))
             }
 
+            #[inline]
             fn build(&self, _opts: &Option<Options>) -> Result<BitVec<u8, Msb0>, String> {
                 let mut bv = BitVec::<u8, Msb0>::new();
                 let bytes = self.to_bits().to_be_bytes();
                 bv.extend_from_raw_slice(&bytes);
                 bv.truncate($size_bits);
                 Ok(bv)
+            }
+
+            #[inline]
+            fn bit_len(&self, _opts: &Option<Options>) -> usize {
+                $size_bits
             }
         }
     };

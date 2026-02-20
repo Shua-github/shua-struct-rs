@@ -78,7 +78,7 @@ fn main() {
     };
 
     let data = player_v2.build(&None).unwrap();
-    let (parsed, _) = Player::parse(&data, &None).unwrap();
+    let parsed = Player::parse(&data, &None).unwrap();
     assert_eq!(parsed.nickname, None);
     let data2 = parsed.build(&None).unwrap();
     assert_eq!(data, data2);
@@ -102,7 +102,7 @@ fn main() {
     };
 
     let data = player_v3.build(&None).unwrap();
-    let (parsed, _) = Player::parse(&data, &None).unwrap();
+    let parsed = Player::parse(&data, &None).unwrap();
     let data2 = parsed.build(&None).unwrap();
 
     assert_eq!(data, data2);
@@ -128,6 +128,4 @@ fn main() {
             println!("✓ Test 3 passed: got expected error: {}", e);
         }
     }
-
-
 }

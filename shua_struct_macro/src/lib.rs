@@ -50,14 +50,14 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
             } else {
                 return syn::Error::new_spanned(
                     &struct_name,
-                    "BinaryStruct only supports structs with named fields",
+                    "BinaryField only supports structs with named fields",
                 )
                 .to_compile_error()
                 .into();
             }
         }
         _ => {
-            return syn::Error::new_spanned(&struct_name, "BinaryStruct only works on structs")
+            return syn::Error::new_spanned(&struct_name, "BinaryField only works on structs")
                 .to_compile_error()
                 .into();
         }
@@ -65,8 +65,9 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
 
     let mut parse_stmts = Vec::new();
     let mut build_stmts = Vec::new();
+    let mut bit_len_stmts = Vec::new();
 
-    for field in fields_named.iter() {
+    for (field_idx, field) in fields_named.iter().enumerate() {
         let field_name = field.ident.as_ref().unwrap();
         let field_type = &field.ty;
 
@@ -121,7 +122,7 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
             quote! {}
         };
 
-        let check_func_logic = if let Some(check_func) = opt_check_func.clone() {
+        let check_func_logic = if let Some(ref check_func) = opt_check_func {
             quote! {
                 if let Some(err) = s.#check_func() {
                     return Err(err);
@@ -131,14 +132,25 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
             quote! {}
         };
 
-        let parse_field_logic = if let Some(if_func) = opt_if_func.clone() {
+        let parse_field_logic = if let Some(ref if_func) = opt_if_func {
             quote! {
                 if s.#if_func() {
                     let field_opts = #field_opts_parse;
-                    let (val, mut l) = <#field_type as shua_struct::BinaryField<#bit_order>>::parse(
+                    let val = <#field_type as shua_struct::BinaryField<#bit_order>>::parse(
                         &bits[offset..],
                         &field_opts
-                    )?;
+                    ).map_err(|e| {
+                        #[cfg(debug_assertions)]
+                        {
+                            format!("{} parse error: {}", stringify!(#field_name), e)
+                        }
+                        #[cfg(not(debug_assertions))]
+                        {
+                            format!("{} parse error: {}", #field_idx, e)
+                        }
+                    })?;
+                    let field_len = <#field_type as shua_struct::BinaryField<#bit_order>>::bit_len(&val, &field_opts);
+                    let mut l = field_len;
                     #align_parse_logic
                     s.#field_name = val;
                     offset += l;
@@ -147,10 +159,21 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
         } else {
             quote! {
                 let field_opts = #field_opts_parse;
-                let (val, mut l) = <#field_type as shua_struct::BinaryField<#bit_order>>::parse(
+                let val = <#field_type as shua_struct::BinaryField<#bit_order>>::parse(
                     &bits[offset..],
                     &field_opts
-                )?;
+                ).map_err(|e| {
+                    #[cfg(debug_assertions)]
+                    {
+                        format!("{} parse error: {}", stringify!(#field_name), e)
+                    }
+                    #[cfg(not(debug_assertions))]
+                    {
+                        format!("{} parse error: {}", #field_idx, e)
+                    }
+                })?;
+                let field_len = <#field_type as shua_struct::BinaryField<#bit_order>>::bit_len(&val, &field_opts);
+                let mut l = field_len;
                 #align_parse_logic
                 s.#field_name = val;
                 offset += l;
@@ -193,11 +216,12 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
             quote! {}
         };
 
-        let build_field_logic = if let Some(if_func) = opt_if_func {
+        let build_field_logic = if let Some(ref if_func) = opt_if_func {
             quote! {
                 if self.#if_func() {
                     let field_opts = #field_opts_build;
-                    let mut field_bv = <#field_type as shua_struct::BinaryField<#bit_order>>::build(&self.#field_name, &field_opts)?;
+                    let field_bv = <#field_type as shua_struct::BinaryField<#bit_order>>::build(&self.#field_name, &field_opts)?;
+                    let mut field_bv = field_bv;
                     #align_build_logic
                     bv.extend(field_bv);
                 }
@@ -205,7 +229,8 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
         } else {
             quote! {
                 let field_opts = #field_opts_build;
-                let mut field_bv = <#field_type as shua_struct::BinaryField<#bit_order>>::build(&self.#field_name, &field_opts)?;
+                let field_bv = <#field_type as shua_struct::BinaryField<#bit_order>>::build(&self.#field_name, &field_opts)?;
+                let mut field_bv = field_bv;
                 #align_build_logic
                 bv.extend(field_bv);
             }
@@ -214,23 +239,58 @@ pub fn binary_struct_derive(input: TokenStream) -> TokenStream {
         build_stmts.push(quote! {
             #build_field_logic
         });
+
+        let bit_len_field_logic = if let Some(ref if_func) = opt_if_func {
+            quote! {
+                if self.#if_func() {
+                    let field_opts = #field_opts_build;
+                    let field_len = <#field_type as shua_struct::BinaryField<#bit_order>>::bit_len(&self.#field_name, &field_opts);
+                    let mut l = field_len;
+                    #align_parse_logic
+                    total_len += l;
+                }
+            }
+        } else {
+            quote! {
+                let field_opts = #field_opts_build;
+                let field_len = <#field_type as shua_struct::BinaryField<#bit_order>>::bit_len(&self.#field_name, &field_opts);
+                let mut l = field_len;
+                #align_parse_logic
+                total_len += l;
+            }
+        };
+
+        bit_len_stmts.push(quote! {
+            #bit_len_field_logic
+        });
     }
 
     let expanded = quote! {
         impl shua_struct::BinaryField<#bit_order> for #struct_name {
+            #[inline]
             fn parse(
                 bits: &shua_struct::BitSlice<u8, #bit_order>,
                 outer_opts: &Option<shua_struct::Options>,
-            ) -> Result<(Self, usize), String> {
+            ) -> Result<Self, String> {
                 let mut s = Self::default();
                 let mut offset = 0;
                 #(#parse_stmts)*
-                Ok((s, offset))
+                Ok(s)
             }
+
+            #[inline]
             fn build(&self, outer_opts: &Option<shua_struct::Options>) -> Result<shua_struct::BitVec<u8, #bit_order>, String> {
-                let mut bv = shua_struct::BitVec::new();
+                let total_bits = self.bit_len(outer_opts);
+                let mut bv = shua_struct::BitVec::with_capacity(total_bits);
                 #(#build_stmts)*
                 Ok(bv)
+            }
+
+            #[inline]
+            fn bit_len(&self, outer_opts: &Option<shua_struct::Options>) -> usize {
+                let mut total_len = 0;
+                #(#bit_len_stmts)*
+                total_len
             }
         }
     };

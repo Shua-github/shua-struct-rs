@@ -5,15 +5,16 @@ impl<T, O: BitOrder, const N: usize> BinaryField<O> for [T; N]
 where
     T: BinaryField<O> + Default + Copy,
 {
-    fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<(Self, usize), String> {
+    #[inline]
+    fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<Self, String> {
         let align = raw_opts.as_ref().and_then(|opts| opts.get_align());
 
         let mut offset = 0;
         let mut arr: [T; N] = [T::default(); N];
 
         for i in 0..N {
-            let (v, l) = T::parse(&bits[offset..], raw_opts)?;
-            offset += l;
+            let v = T::parse(&bits[offset..], raw_opts)?;
+            offset += v.bit_len(raw_opts);
             if let Some(align) = align {
                 let r = offset % align;
                 if r != 0 {
@@ -23,13 +24,14 @@ where
             arr[i] = v;
         }
 
-        Ok((arr, offset))
+        Ok(arr)
     }
 
+    #[inline]
     fn build(&self, raw_opts: &Option<Options>) -> Result<BitVec<u8, O>, String> {
         let align = raw_opts.as_ref().and_then(|opts| opts.get_align());
 
-        let mut bv = BitVec::<u8, O>::new();
+        let mut bv = BitVec::<u8, O>::with_capacity(self.bit_len(raw_opts));
         for item in self.iter() {
             bv.extend(item.build(raw_opts)?);
 
@@ -42,13 +44,31 @@ where
         }
         Ok(bv)
     }
+
+    #[inline]
+    fn bit_len(&self, opts: &Option<Options>) -> usize {
+        let align = opts.as_ref().and_then(|opts| opts.get_align());
+
+        let mut total = 0;
+        for item in self.iter() {
+            total += item.bit_len(opts);
+            if let Some(align) = align {
+                let r = total % align;
+                if r != 0 {
+                    total += align - r;
+                }
+            }
+        }
+        total
+    }
 }
 
 impl<T, O: BitOrder> BinaryField<O> for Vec<T>
 where
     T: BinaryField<O> + Default,
 {
-    fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<(Self, usize), String> {
+    #[inline]
+    fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<Self, String> {
         let opts = raw_opts.as_ref().ok_or("Vec parse error: missing opts")?;
         if opts.size == 0 {
             return Err("Vec parse error: missing size".to_string());
@@ -59,8 +79,8 @@ where
         let mut offset = 0;
 
         for _ in 0..opts.size {
-            let (item, l) = T::parse(&bits[offset..], raw_opts)?;
-            offset += l;
+            let item = T::parse(&bits[offset..], raw_opts)?;
+            offset += item.bit_len(raw_opts);
             if let Some(align) = align {
                 let r = offset % align;
                 if r != 0 {
@@ -69,14 +89,15 @@ where
             }
             vec.push(item);
         }
-        Ok((vec, offset))
+        Ok(vec)
     }
 
+    #[inline]
     fn build(&self, raw_opts: &Option<Options>) -> Result<BitVec<u8, O>, String> {
         let opts = raw_opts.as_ref().ok_or("Vec build error: missing opts")?;
         let align = opts.get_align();
 
-        let mut bv = BitVec::<u8, O>::new();
+        let mut bv = BitVec::<u8, O>::with_capacity(self.bit_len(raw_opts));
         for item in self.iter() {
             bv.extend(item.build(raw_opts)?);
             if let Some(align) = align {
@@ -87,5 +108,22 @@ where
             }
         }
         Ok(bv)
+    }
+
+    #[inline]
+    fn bit_len(&self, opts: &Option<Options>) -> usize {
+        let align = opts.as_ref().and_then(|opts| opts.get_align());
+
+        let mut total = 0;
+        for item in self.iter() {
+            total += item.bit_len(opts);
+            if let Some(align) = align {
+                let r = total % align;
+                if r != 0 {
+                    total += align - r;
+                }
+            }
+        }
+        total
     }
 }
