@@ -69,10 +69,9 @@ impl<'a> FieldGenerator<'a> {
 
     fn gen_ctx(&self, prefix: &TokenStream2) -> TokenStream2 {
         let has_count = self.attrs.count_field.is_some() || self.attrs.count_func.is_some();
-        let has_align = self.attrs.align.is_some();
         let has_elem_align = self.attrs.elem_align.is_some();
 
-        if !has_count && !has_align && !has_elem_align {
+        if !has_count && !has_elem_align {
             return quote! { () };
         }
 
@@ -100,10 +99,10 @@ impl<'a> FieldGenerator<'a> {
             quote! {}
         };
 
-        let align_impl = if has_align || has_elem_align {
-            let align_val = self.attrs.align.or(self.attrs.elem_align).unwrap_or(0);
+        let align_impl = if has_elem_align {
+            let elem_align_val = self.attrs.elem_align.unwrap();
             struct_fields.push(quote! { align: usize, });
-            inst_fields.push(quote! { align: #align_val, });
+            inst_fields.push(quote! { align: #elem_align_val, });
             quote! {
                 impl shua_struct::Align for #ctx_name {
                     #[inline]
@@ -119,10 +118,8 @@ impl<'a> FieldGenerator<'a> {
             }
         };
 
-        let elem_ctx_impl = if let Some(elem_align_val) = self.attrs.elem_align {
+        let elem_ctx_impl = if let Some(_elem_align_val) = self.attrs.elem_align {
             let elem_ctx_name = quote::format_ident!("{}ElemCtx", self.name);
-            struct_fields.push(quote! { elem_align: usize, });
-            inst_fields.push(quote! { elem_align: #elem_align_val, });
             quote! {
                 #[allow(non_camel_case_types)]
                 struct #elem_ctx_name { align: usize }
@@ -136,7 +133,7 @@ impl<'a> FieldGenerator<'a> {
                     type ElemCtx = #elem_ctx_name;
                     #[inline]
                     fn get_elem_ctx(&self) -> Self::ElemCtx {
-                        #elem_ctx_name { align: self.elem_align }
+                        #elem_ctx_name { align: self.align }
                     }
                 }
             }

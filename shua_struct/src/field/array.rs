@@ -1,5 +1,16 @@
 use crate::{Align, BinaryError, BinaryField, BitOrder, BitSlice, Count, ElemCtx};
 
+#[inline]
+fn align_offset(offset: usize, align: usize) -> usize {
+    if align == 0 {
+        offset
+    } else if align.is_power_of_two() {
+        (offset + align - 1) & !(align - 1)
+    } else {
+        (offset + align - 1) / align * align
+    }
+}
+
 impl<T, O, Ctx, const N: usize> BinaryField<O, Ctx> for [T; N]
 where
     O: BitOrder,
@@ -22,14 +33,7 @@ where
             })?;
 
             offset += v.bit_len(&elem_ctx);
-
-            if align > 0 {
-                let r = offset % align;
-                if r != 0 {
-                    offset += align - r;
-                }
-            }
-
+            offset = align_offset(offset, align);
             *item = v;
         }
 
@@ -52,13 +56,7 @@ where
                 })?;
 
             offset += len;
-
-            if align > 0 {
-                let r = offset % align;
-                if r != 0 {
-                    offset += align - r;
-                }
-            }
+            offset = align_offset(offset, align);
         }
 
         Ok(())
@@ -71,13 +69,7 @@ where
 
         for item in self.iter() {
             total += item.bit_len(&elem_ctx);
-
-            if align > 0 {
-                let r = total % align;
-                if r != 0 {
-                    total += align - r;
-                }
-            }
+            total = align_offset(total, align);
         }
 
         total
@@ -112,14 +104,7 @@ where
             })?;
 
             offset += item.bit_len(&elem_ctx);
-
-            if align > 0 {
-                let r = offset % align;
-                if r != 0 {
-                    offset += align - r;
-                }
-            }
-
+            offset = align_offset(offset, align);
             vec.push(item);
         }
 
@@ -147,20 +132,16 @@ where
                 })?;
 
             offset += len;
+            let prev_offset = offset;
+            offset = align_offset(offset, align);
 
-            if align > 0 {
-                let r = offset % align;
-                if r != 0 {
-                    offset += align - r;
-
-                    #[cfg(debug_assertions)]
-                    if offset > bits.len() {
-                        return Err(Self::Error::bit_count_mismatch(
-                            align - r,
-                            bits.len() - (offset - (align - r)),
-                        ));
-                    }
-                }
+            #[cfg(debug_assertions)]
+            if offset > bits.len() {
+                let align_bytes = offset - prev_offset;
+                return Err(Self::Error::bit_count_mismatch(
+                    align_bytes,
+                    bits.len() - prev_offset,
+                ));
             }
         }
 
@@ -175,13 +156,7 @@ where
 
         for item in self.iter() {
             total += item.bit_len(&elem_ctx);
-
-            if align > 8 {
-                let r = total % align;
-                if r != 0 {
-                    total += align - r;
-                }
-            }
+            total = align_offset(total, align);
         }
 
         total

@@ -93,7 +93,7 @@ fn main() {
         version: 3,
         id: 2,
         name: CString::new("Bob").unwrap(),
-        level: 3,
+        level: 1,
         nickname: Some(CString::new("B-Man").unwrap()),
         inventory: vec![Inventory {
             slot_count: 1,
