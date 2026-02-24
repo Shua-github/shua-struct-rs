@@ -125,7 +125,6 @@ impl<'a> FieldGenerator<'a> {
             inst_fields.push(quote! { elem_align: #elem_align_val, });
             quote! {
                 #[allow(non_camel_case_types)]
-                #[derive(Clone)]
                 struct #elem_ctx_name { align: usize }
 
                 impl shua_struct::Align for #elem_ctx_name {
@@ -154,7 +153,6 @@ impl<'a> FieldGenerator<'a> {
         quote! {
             {
                 #[allow(non_camel_case_types)]
-                #[derive(Clone)]
                 struct #ctx_name {
                     #(#struct_fields)*
                 }

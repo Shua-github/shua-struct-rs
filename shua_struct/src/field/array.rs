@@ -4,7 +4,7 @@ impl<T, O, Ctx, const N: usize> BinaryField<O, Ctx> for [T; N]
 where
     O: BitOrder,
     T: BinaryField<O, <Ctx as ElemCtx>::ElemCtx> + Default + Copy,
-    Ctx: ElemCtx + Align + Clone,
+    Ctx: ElemCtx + Align,
 {
     type Error = BinaryError<T::Error, usize>;
 
@@ -87,8 +87,8 @@ where
 impl<T, O: BitOrder, Ctx> BinaryField<O, Ctx> for Vec<T>
 where
     O: BitOrder,
-    T: BinaryField<O, <Ctx as ElemCtx>::ElemCtx> + Default + Copy,
-    Ctx: ElemCtx + Align + Clone + Count,
+    T: BinaryField<O, <Ctx as ElemCtx>::ElemCtx>,
+    Ctx: ElemCtx + Align + Count,
 {
     type Error = BinaryError<T::Error, usize>;
 

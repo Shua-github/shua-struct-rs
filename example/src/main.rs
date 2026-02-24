@@ -16,6 +16,8 @@ pub struct Inventory {
     pub slot_count: u8,
     #[binary_field(count_func = actual_slots)]
     pub items: Vec<Item>,
+    #[binary_field(align = 8)]
+    pub flags: [bool; 3],
 }
 
 impl Inventory {
@@ -33,7 +35,7 @@ pub struct Player {
     pub name: CString,
     pub level: u8,
     #[binary_field(count_field = level)]
-    pub inventory: Inventory,
+    pub inventory: Vec<Inventory>,
     #[binary_field(if_func = should_nickname)]
     pub nickname: Option<CString>,
 }
@@ -58,9 +60,9 @@ fn main() {
         version: 2,
         id: 1,
         name: CString::new("Alice").unwrap(),
-        level: 2,
+        level: 1,
         nickname: Some(CString::new("AAA").unwrap()),
-        inventory: Inventory {
+        inventory: vec![Inventory {
             slot_count: 2,
             items: vec![
                 Item {
@@ -74,7 +76,8 @@ fn main() {
                     flags: [false, true, false],
                 },
             ],
-        },
+            flags: [true, false, true]
+        }],
     };
 
     let bv = player_v2.to_bitvec(&()).unwrap();
@@ -92,14 +95,15 @@ fn main() {
         name: CString::new("Bob").unwrap(),
         level: 3,
         nickname: Some(CString::new("B-Man").unwrap()),
-        inventory: Inventory {
+        inventory: vec![Inventory {
             slot_count: 1,
             items: vec![Item {
                 id: 300,
                 count: 5,
                 flags: [true, true, false],
             }],
-        },
+            flags: [false, true, false],
+        }],
     };
 
     let bv: BitVec<u8> = player_v3.to_bitvec(&()).unwrap();
@@ -117,10 +121,11 @@ fn main() {
         name: CString::new("Charlie").unwrap(),
         level: 1,
         nickname: None,
-        inventory: Inventory {
+        inventory: vec![Inventory {
             slot_count: 0,
             items: vec![],
-        },
+            flags: [false, false, false],
+        }],
     };
 
     let bv = player_v1.to_bitvec(&()).unwrap();
