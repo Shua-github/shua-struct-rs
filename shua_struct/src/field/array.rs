@@ -1,129 +1,189 @@
-use crate::{BinaryField, Options};
-use bitvec::prelude::*;
+use crate::{Align, BinaryError, BinaryField, BitOrder, BitSlice, Count, ElemCtx};
 
-impl<T, O: BitOrder, const N: usize> BinaryField<O> for [T; N]
+impl<T, O, Ctx, const N: usize> BinaryField<O, Ctx> for [T; N]
 where
-    T: BinaryField<O> + Default + Copy,
+    O: BitOrder,
+    T: BinaryField<O, <Ctx as ElemCtx>::ElemCtx> + Default + Copy,
+    Ctx: ElemCtx + Align + Clone,
 {
-    #[inline]
-    fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<Self, String> {
-        let align = raw_opts.as_ref().and_then(|opts| opts.get_align());
+    type Error = BinaryError<T::Error, usize>;
 
+    fn parse(bits: &BitSlice<u8, O>, ctx: &Ctx) -> Result<Self, Self::Error> {
         let mut offset = 0;
-        let mut arr: [T; N] = [T::default(); N];
+        let mut arr = [T::default(); N];
 
-        for i in 0..N {
-            let v = T::parse(&bits[offset..], raw_opts)?;
-            offset += v.bit_len(raw_opts);
-            if let Some(align) = align {
+        let align = ctx.get_align();
+        let elem_ctx = ctx.get_elem_ctx();
+
+        for (i, item) in arr.iter_mut().enumerate() {
+            let v = T::parse(&bits[offset..], &elem_ctx).map_err(|e| Self::Error::At {
+                index: i,
+                source: e,
+            })?;
+
+            offset += v.bit_len(&elem_ctx);
+
+            if align > 0 {
                 let r = offset % align;
                 if r != 0 {
                     offset += align - r;
                 }
             }
-            arr[i] = v;
+
+            *item = v;
         }
 
         Ok(arr)
     }
 
-    #[inline]
-    fn build(&self, raw_opts: &Option<Options>) -> Result<BitVec<u8, O>, String> {
-        let align = raw_opts.as_ref().and_then(|opts| opts.get_align());
-
-        let mut bv = BitVec::<u8, O>::with_capacity(self.bit_len(raw_opts));
-        for item in self.iter() {
-            bv.extend(item.build(raw_opts)?);
-
-            if let Some(align) = align {
-                let r = bv.len() % align;
-                if r != 0 {
-                    bv.resize(bv.len() + (align - r), false);
-                }
-            }
-        }
-        Ok(bv)
-    }
-
-    #[inline]
-    fn bit_len(&self, opts: &Option<Options>) -> usize {
-        let align = opts.as_ref().and_then(|opts| opts.get_align());
-
-        let mut total = 0;
-        for item in self.iter() {
-            total += item.bit_len(opts);
-            if let Some(align) = align {
-                let r = total % align;
-                if r != 0 {
-                    total += align - r;
-                }
-            }
-        }
-        total
-    }
-}
-
-impl<T, O: BitOrder> BinaryField<O> for Vec<T>
-where
-    T: BinaryField<O> + Default,
-{
-    #[inline]
-    fn parse(bits: &BitSlice<u8, O>, raw_opts: &Option<Options>) -> Result<Self, String> {
-        let opts = raw_opts.as_ref().ok_or("Vec parse error: missing opts")?;
-        if opts.size == 0 {
-            return Err("Vec parse error: missing size".to_string());
-        }
-        let align = opts.get_align();
-
-        let mut vec = Vec::with_capacity(opts.size);
+    fn build(&self, bits: &mut BitSlice<u8, O>, ctx: &Ctx) -> Result<(), Self::Error> {
         let mut offset = 0;
 
-        for _ in 0..opts.size {
-            let item = T::parse(&bits[offset..], raw_opts)?;
-            offset += item.bit_len(raw_opts);
-            if let Some(align) = align {
+        let align = ctx.get_align();
+        let elem_ctx = ctx.get_elem_ctx();
+
+        for (i, item) in self.iter().enumerate() {
+            let len = item.bit_len(&elem_ctx);
+
+            item.build(&mut bits[offset..offset + len], &elem_ctx)
+                .map_err(|e| Self::Error::At {
+                    index: i,
+                    source: e,
+                })?;
+
+            offset += len;
+
+            if align > 0 {
                 let r = offset % align;
                 if r != 0 {
                     offset += align - r;
                 }
             }
-            vec.push(item);
         }
-        Ok(vec)
+
+        Ok(())
     }
 
-    #[inline]
-    fn build(&self, raw_opts: &Option<Options>) -> Result<BitVec<u8, O>, String> {
-        let opts = raw_opts.as_ref().ok_or("Vec build error: missing opts")?;
-        let align = opts.get_align();
-
-        let mut bv = BitVec::<u8, O>::with_capacity(self.bit_len(raw_opts));
-        for item in self.iter() {
-            bv.extend(item.build(raw_opts)?);
-            if let Some(align) = align {
-                let r = bv.len() % align;
-                if r != 0 {
-                    bv.resize(bv.len() + (align - r), false);
-                }
-            }
-        }
-        Ok(bv)
-    }
-
-    #[inline]
-    fn bit_len(&self, opts: &Option<Options>) -> usize {
-        let align = opts.as_ref().and_then(|opts| opts.get_align());
-
+    fn bit_len(&self, ctx: &Ctx) -> usize {
         let mut total = 0;
+        let align = ctx.get_align();
+        let elem_ctx = ctx.get_elem_ctx();
+
         for item in self.iter() {
-            total += item.bit_len(opts);
-            if let Some(align) = align {
+            total += item.bit_len(&elem_ctx);
+
+            if align > 0 {
                 let r = total % align;
                 if r != 0 {
                     total += align - r;
                 }
             }
         }
+
+        total
+    }
+}
+
+impl<T, O: BitOrder, Ctx> BinaryField<O, Ctx> for Vec<T>
+where
+    O: BitOrder,
+    T: BinaryField<O, <Ctx as ElemCtx>::ElemCtx> + Default + Copy,
+    Ctx: ElemCtx + Align + Clone + Count,
+{
+    type Error = BinaryError<T::Error, usize>;
+
+    #[inline]
+    fn parse(bits: &BitSlice<u8, O>, ctx: &Ctx) -> Result<Self, Self::Error> {
+        let size = ctx.get_count();
+        if size == 0 {
+            return Ok(Vec::new());
+        }
+
+        let align = ctx.get_align();
+        let elem_ctx = ctx.get_elem_ctx();
+
+        let mut offset = 0;
+        let mut vec = Vec::with_capacity(size);
+
+        for i in 0..size {
+            let item = T::parse(&bits[offset..], &elem_ctx).map_err(|e| Self::Error::At {
+                index: i,
+                source: e,
+            })?;
+
+            offset += item.bit_len(&elem_ctx);
+
+            if align > 0 {
+                let r = offset % align;
+                if r != 0 {
+                    offset += align - r;
+                }
+            }
+
+            vec.push(item);
+        }
+
+        Ok(vec)
+    }
+
+    #[inline]
+    fn build(&self, bits: &mut BitSlice<u8, O>, ctx: &Ctx) -> Result<(), Self::Error> {
+        let align = ctx.get_align();
+        let mut offset = 0;
+        let elem_ctx = ctx.get_elem_ctx();
+
+        for (i, item) in self.iter().enumerate() {
+            let len = item.bit_len(&elem_ctx);
+
+            #[cfg(debug_assertions)]
+            if offset + len > bits.len() {
+                return Err(Self::Error::bit_count_mismatch(len, bits.len() - offset));
+            }
+
+            item.build(&mut bits[offset..offset + len], &elem_ctx)
+                .map_err(|e| Self::Error::At {
+                    index: i,
+                    source: e,
+                })?;
+
+            offset += len;
+
+            if align > 0 {
+                let r = offset % align;
+                if r != 0 {
+                    offset += align - r;
+
+                    #[cfg(debug_assertions)]
+                    if offset > bits.len() {
+                        return Err(Self::Error::bit_count_mismatch(
+                            align - r,
+                            bits.len() - (offset - (align - r)),
+                        ));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    #[inline]
+    fn bit_len(&self, ctx: &Ctx) -> usize {
+        let align = ctx.get_align();
+        let mut total = 0;
+        let elem_ctx = ctx.get_elem_ctx();
+
+        for item in self.iter() {
+            total += item.bit_len(&elem_ctx);
+
+            if align > 8 {
+                let r = total % align;
+                if r != 0 {
+                    total += align - r;
+                }
+            }
+        }
+
         total
     }
 }

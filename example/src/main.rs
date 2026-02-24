@@ -1,7 +1,7 @@
-use shua_struct::BinaryField;
+use shua_struct::{BinaryField, BitVec};
 use std::ffi::CString;
 
-#[derive(Debug, Default, BinaryField)]
+#[derive(Clone, Copy, Debug, Default, BinaryField)]
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Item {
     pub id: u16,
@@ -14,7 +14,7 @@ pub struct Item {
 #[binary_struct(bit_order = shua_struct::Lsb0)]
 pub struct Inventory {
     pub slot_count: u8,
-    #[binary_field(size_func = actual_slots)]
+    #[binary_field(count_func = actual_slots)]
     pub items: Vec<Item>,
 }
 
@@ -25,25 +25,25 @@ impl Inventory {
 }
 
 #[derive(Debug, Default, BinaryField)]
-#[binary_struct(bit_order = shua_struct::Lsb0)]
+#[binary_struct(bit_order = shua_struct::Lsb0,custom_error = "String")]
 pub struct Player {
     #[binary_field(check_func = check_version)]
     pub version: u8,
     pub id: u32,
     pub name: CString,
     pub level: u8,
-    #[binary_field(size_field = level)]
+    #[binary_field(count_field = level)]
     pub inventory: Inventory,
     #[binary_field(if_func = should_nickname)]
     pub nickname: Option<CString>,
 }
 
 impl Player {
-    fn check_version(&self) -> Option<String> {
+    fn check_version(&self) -> Result<(), String> {
         if self.version <= 1 {
-            Some("Version must be greater than 1".to_string())
+            Err("Version must be greater than 1".to_string())
         } else {
-            None
+            Ok(())
         }
     }
 
@@ -77,11 +77,12 @@ fn main() {
         },
     };
 
-    let data = player_v2.build(&None).unwrap();
-    let parsed = Player::parse(&data, &None).unwrap();
+    let bv = player_v2.to_bitvec(&()).unwrap();
+    let parsed = Player::parse(&bv, &()).unwrap();
     assert_eq!(parsed.nickname, None);
-    let data2 = parsed.build(&None).unwrap();
-    assert_eq!(data, data2);
+    let bv2 = parsed.to_bitvec(&()).unwrap();
+
+    assert_eq!(bv, bv2);
     println!("✓ Test 1 passed\n");
 
     println!("=== Test 2: Version 3 (nickname included) ===");
@@ -101,11 +102,12 @@ fn main() {
         },
     };
 
-    let data = player_v3.build(&None).unwrap();
-    let parsed = Player::parse(&data, &None).unwrap();
-    let data2 = parsed.build(&None).unwrap();
+    let bv: BitVec<u8> = player_v3.to_bitvec(&()).unwrap();
+    let parsed = Player::parse(&bv, &()).unwrap();
 
-    assert_eq!(data, data2);
+    let bv2 = parsed.to_bitvec(&()).unwrap();
+
+    assert_eq!(bv, bv2);
     println!("✓ Test 2 passed\n");
 
     println!("=== Test 3: Version 1 (invalid version, should error) ===");
@@ -121,11 +123,11 @@ fn main() {
         },
     };
 
-    let data = player_v1.build(&None).unwrap();
-    match Player::parse(&data, &None) {
+    let bv = player_v1.to_bitvec(&()).unwrap();
+    match Player::parse(&bv, &()) {
         Ok(_) => println!("✗ Test 3 failed: should have returned error"),
         Err(e) => {
-            println!("✓ Test 3 passed: got expected error: {}", e);
+            println!("✓ Test 3 passed: got expected error: {:?}", e);
         }
     }
 }

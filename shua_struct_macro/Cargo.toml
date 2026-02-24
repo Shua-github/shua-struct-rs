@@ -1,6 +1,6 @@
 [package]
 name = "shua_struct_macro"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 authors = ["Shua <CHA_Shua@outlook.com>"]
 license = "MIT"
@@ -14,3 +14,4 @@ proc-macro = true
 quote = "1.0.42"
 syn = "2"
 darling = "0.23.0"
+proc-macro2 = "1.0.106"

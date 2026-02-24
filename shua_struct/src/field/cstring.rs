@@ -1,10 +1,11 @@
-use crate::{BinaryField, Options};
-use bitvec::prelude::*;
-use std::ffi::CString;
+use crate::{BinaryError, BinaryField, BitField, BitSlice, Lsb0, Msb0};
+use std::ffi::{CString, NulError};
 
 impl BinaryField<Lsb0> for CString {
+    type Error = BinaryError<(), (), NulError>;
+
     #[inline]
-    fn parse(bits: &BitSlice<u8, Lsb0>, _opts: &Option<Options>) -> Result<Self, String> {
+    fn parse(bits: &BitSlice<u8, Lsb0>, _: &()) -> Result<Self, Self::Error> {
         let mut bytes = Vec::new();
         let mut i = 0;
 
@@ -17,26 +18,39 @@ impl BinaryField<Lsb0> for CString {
             i += 1;
         }
 
-        CString::new(bytes)
-            .map_err(|_| "CString parse error: contains interior null byte".to_string())
+        CString::new(bytes).map_err(Self::Error::Custom)
     }
 
     #[inline]
-    fn build(&self, _opts: &Option<Options>) -> Result<BitVec<u8, Lsb0>, String> {
-        let mut bv = BitVec::<u8, Lsb0>::new();
-        bv.extend_from_raw_slice(self.to_bytes_with_nul());
-        Ok(bv)
+    fn build(&self, bits: &mut BitSlice<u8, Lsb0>, _: &()) -> Result<(), Self::Error> {
+        let bytes = self.to_bytes_with_nul();
+        #[cfg(debug_assertions)]
+        {
+            let data_len = bytes.len() * 8;
+            let input_len = bits.len();
+            if input_len < data_len {
+                return Err(Self::Error::bit_count_mismatch(data_len, input_len));
+            }
+        }
+
+        for (i, &b) in bytes.iter().enumerate() {
+            bits[i * 8..(i + 1) * 8].store_le(b);
+        }
+
+        Ok(())
     }
 
     #[inline]
-    fn bit_len(&self, _opts: &Option<Options>) -> usize {
+    fn bit_len(&self, _: &()) -> usize {
         self.to_bytes_with_nul().len() * 8
     }
 }
 
 impl BinaryField<Msb0> for CString {
+    type Error = BinaryError<(), (), NulError>;
+
     #[inline]
-    fn parse(bits: &BitSlice<u8, Msb0>, _opts: &Option<Options>) -> Result<Self, String> {
+    fn parse(bits: &BitSlice<u8, Msb0>, _: &()) -> Result<Self, Self::Error> {
         let mut bytes = Vec::new();
         let mut i = 0;
 
@@ -49,19 +63,30 @@ impl BinaryField<Msb0> for CString {
             i += 1;
         }
 
-        CString::new(bytes)
-            .map_err(|_| "CString parse error: contains interior null byte".to_string())
+        CString::new(bytes).map_err(Self::Error::Custom)
     }
 
     #[inline]
-    fn build(&self, _opts: &Option<Options>) -> Result<BitVec<u8, Msb0>, String> {
-        let mut bv = BitVec::<u8, Msb0>::new();
-        bv.extend_from_raw_slice(self.to_bytes_with_nul());
-        Ok(bv)
+    fn build(&self, bits: &mut BitSlice<u8, Msb0>, _: &()) -> Result<(), Self::Error> {
+        let bytes = self.to_bytes_with_nul();
+        #[cfg(debug_assertions)]
+        {
+            let data_len = bytes.len() * 8;
+            let input_len = bits.len();
+            if input_len < data_len {
+                return Err(Self::Error::bit_count_mismatch(data_len, input_len));
+            }
+        }
+
+        for (i, &b) in bytes.iter().enumerate() {
+            bits[i * 8..(i + 1) * 8].store_be(b);
+        }
+
+        Ok(())
     }
 
     #[inline]
-    fn bit_len(&self, _opts: &Option<Options>) -> usize {
+    fn bit_len(&self, _: &()) -> usize {
         self.to_bytes_with_nul().len() * 8
     }
 }

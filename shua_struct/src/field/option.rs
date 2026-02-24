@@ -1,31 +1,29 @@
-use crate::{BinaryField, Options};
+use crate::{BinaryField, BitOrder, BitSlice};
 
-impl<O, T> BinaryField<O> for Option<T>
+impl<O, T, Ctx> BinaryField<O, Ctx> for Option<T>
 where
-    O: bitvec::prelude::BitOrder,
-    T: BinaryField<O>,
+    O: BitOrder,
+    T: BinaryField<O, Ctx>,
 {
+    type Error = T::Error;
     #[inline]
-    fn parse(
-        bits: &bitvec::prelude::BitSlice<u8, O>,
-        opts: &Option<Options>,
-    ) -> Result<Self, String> {
-        let value = T::parse(bits, opts)?;
+    fn parse(bits: &BitSlice<u8, O>, ctx: &Ctx) -> Result<Self, Self::Error> {
+        let value = T::parse(bits, ctx)?;
         Ok(Some(value))
     }
 
     #[inline]
-    fn build(&self, opts: &Option<Options>) -> Result<bitvec::prelude::BitVec<u8, O>, String> {
+    fn build(&self, bits: &mut BitSlice<u8, O>, ctx: &Ctx) -> Result<(), Self::Error> {
         match self {
-            Some(value) => value.build(opts),
-            None => Ok(bitvec::prelude::BitVec::new()),
+            Some(value) => value.build(bits, ctx),
+            None => Ok(()),
         }
     }
 
     #[inline]
-    fn bit_len(&self, opts: &Option<Options>) -> usize {
+    fn bit_len(&self, ctx: &Ctx) -> usize {
         match self {
-            Some(v) => v.bit_len(opts),
+            Some(v) => v.bit_len(ctx),
             None => 0,
         }
     }
